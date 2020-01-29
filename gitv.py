@@ -1,60 +1,39 @@
 import pandas as pd
 import git
 import pyecharts.options as opts
-from pyecharts.charts import Line,Bar,Timeline
+from pyecharts.charts import Bar, Timeline
 
 repo = git.Repo(r'~/django-bootstrap-toolkit', odbt=git.GitCmdObjectDB)
 commits = pd.DataFrame(repo.iter_commits('master'), columns=['raw'])
-print(commits.head())
 
 commits['author'] = commits['raw'].apply(lambda x: x.author.name)
-commits['committed_date'] = commits['raw'].apply(lambda x: pd.to_datetime(x.committed_datetime))
-#commits['committed_date'] = commits['raw'].apply(lambda x: pd.to_datetime(x.committed_datetime, format='%Y/%m/%d'))
-#commits['committed_date'] = commits['raw'].apply(lambda x: x.committed_datetime.strftime("%Y %B W%w"))
+commits['committed_date'] = commits['raw'].apply(
+    lambda x: x.committed_datetime.strftime('%Y-%m-%d %H:%M:%S'))
 commits['lines'] = commits['raw'].apply(lambda x: x.stats.total['lines'])
 commits['insert'] = commits['raw'].apply(lambda x: x.stats.total['insertions'])
 commits['delete'] = commits['raw'].apply(lambda x: x.stats.total['deletions'])
 
-#date = commits["committed_date"].apply(lambda x: str(x)).tolist()
-
-#print(commits.head())
-#print(commits.tail())
-#print(commits.info())
-
 new = commits.iloc[::-1]
 
-#date = new["committed_date"].apply(lambda x: str(x)).tolist()
-#print(commits.groupby(['author', 'committed_date'], as_index=False).agg({'lines' : sum, 'raw' : 'first'}))
-#df.groupby('ID', as_index=False).agg({'NAME' : ' '.join, 'AGE' : 'first'})
-
-#l = Line()
-#l.add_xaxis(xaxis_data=date)
-#l.add_yaxis(series_name="", y_axis=new['lines'])
-#l.set_global_opts(title_opts=opts.TitleOpts(title="某商场销售情况"))
-#l.render()
-
-def get_year_overlap_chart(time: int, names: list, v1: list, v2: list) -> Bar:
+def get_commits_chart(time: str, names: list, c_insert: list, c_delete: list) -> Bar:
     bar = (
         Bar()
         .add_xaxis(xaxis_data=names)
         .add_yaxis(
             series_name="Insert",
-            yaxis_data=v1,
+            yaxis_data=c_insert,
             is_selected=True,
-            label_opts=opts.LabelOpts(is_show=False),
+            label_opts=opts.LabelOpts(is_show=True),
         )
         .add_yaxis(
             series_name="Delete",
-            yaxis_data=v2,
+            yaxis_data=c_delete,
             is_selected=True,
-            label_opts=opts.LabelOpts(is_show=False),
+            label_opts=opts.LabelOpts(is_show=True),
         )
         .set_global_opts(
             title_opts=opts.TitleOpts(
                 title="{} Contribution".format(time), subtitle="Git"
-            ),
-            tooltip_opts=opts.TooltipOpts(
-                is_show=True, trigger="axis", axis_pointer_type="shadow"
             ),
         )
     )
@@ -70,20 +49,24 @@ insert_lines = []
 delete_lines = []
 
 for row in new.itertuples():
-    author = row[2]
-    date = row[3]
+    _, _, author, date, lines, insert, delete = row
+
     if author not in authors:
         authors.append(author)
-        contributes.append(row[4])
-        insert_lines.append(row[5])
-        delete_lines.append(row[6])
+        contributes.append(lines)
+        insert_lines.append(insert)
+        delete_lines.append(delete)
     else:
-        contributes[authors.index(author)] += row[4]
-        insert_lines[authors.index(author)] += row[5]
-        delete_lines[authors.index(author)] += row[6]
+        contributes[authors.index(author)] += lines
+        insert_lines[authors.index(author)] += insert
+        delete_lines[authors.index(author)] += delete
 
-    timeline.add(get_year_overlap_chart(time=date, names=authors.copy(), v1=insert_lines.copy(), v2=delete_lines.copy()), time_point=date)
+    timeline.add(get_commits_chart(time=date,
+        names=authors.copy(),
+        c_insert=insert_lines.copy(),
+        c_delete=delete_lines.copy()),
+        time_point=date)
 
 # 1.0.0 版本的 add_schema 暂时没有补上 return self 所以只能这么写着
-timeline.add_schema(is_auto_play=True, play_interval=1000)
+timeline.add_schema(is_auto_play=True, play_interval=100)
 timeline.render("git.html")
