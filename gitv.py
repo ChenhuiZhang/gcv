@@ -33,19 +33,25 @@ new = commits.iloc[::-1]
 #l.set_global_opts(title_opts=opts.TitleOpts(title="某商场销售情况"))
 #l.render()
 
-def get_year_overlap_chart(time: int, names: list, value: list) -> Bar:
+def get_year_overlap_chart(time: int, names: list, v1: list, v2: list) -> Bar:
     bar = (
         Bar()
         .add_xaxis(xaxis_data=names)
         .add_yaxis(
-            series_name="Lines",
-            yaxis_data=value,
+            series_name="Insert",
+            yaxis_data=v1,
+            is_selected=True,
+            label_opts=opts.LabelOpts(is_show=False),
+        )
+        .add_yaxis(
+            series_name="Delete",
+            yaxis_data=v2,
             is_selected=True,
             label_opts=opts.LabelOpts(is_show=False),
         )
         .set_global_opts(
             title_opts=opts.TitleOpts(
-                title="{}contribution".format(time), subtitle="Git"
+                title="{} Contribution".format(time), subtitle="Git"
             ),
             tooltip_opts=opts.TooltipOpts(
                 is_show=True, trigger="axis", axis_pointer_type="shadow"
@@ -60,18 +66,23 @@ timeline = Timeline(init_opts=opts.InitOpts(width="1600px", height="800px"))
 
 authors = []
 contributes = []
+insert_lines = []
+delete_lines = []
 
 for row in new.itertuples():
     author = row[2]
     date = row[3]
-    line = row[4]
     if author not in authors:
         authors.append(author)
-        contributes.append(line)
+        contributes.append(row[4])
+        insert_lines.append(row[5])
+        delete_lines.append(row[6])
     else:
-        contributes[authors.index(author)] += line
+        contributes[authors.index(author)] += row[4]
+        insert_lines[authors.index(author)] += row[5]
+        delete_lines[authors.index(author)] += row[6]
 
-    timeline.add(get_year_overlap_chart(time=date, names=authors.copy(), value=contributes.copy()), time_point=date)
+    timeline.add(get_year_overlap_chart(time=date, names=authors.copy(), v1=insert_lines.copy(), v2=delete_lines.copy()), time_point=date)
 
 # 1.0.0 版本的 add_schema 暂时没有补上 return self 所以只能这么写着
 timeline.add_schema(is_auto_play=True, play_interval=1000)
