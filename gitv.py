@@ -55,11 +55,11 @@ def get_commits_chart(time: str, names: list, c_insert: list, c_delete: list, c_
     )
     return contribute
 
-def get_topX(top, row, x):
+def get_topX(top: dict, row: tuple, x: int):
     """
     TODO
     """
-    _, _, author, _, _, insert, delete = row
+    _, _, author, *_, insert, delete = row
 
     contribute = pd.DataFrame(columns=['author', 'add', 'insert', 'delete'])
 
