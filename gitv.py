@@ -16,9 +16,16 @@ def get_repo():
     commits['author'] = commits['raw'].apply(lambda x: x.author.name)
     commits['committed_date'] = commits['raw'].apply(\
             lambda x: x.committed_datetime.strftime('%Y-%m-%d %H:%M:%S'))
-    commits['lines'] = commits['raw'].apply(lambda x: x.stats.total['lines'])
-    commits['insert'] = commits['raw'].apply(lambda x: x.stats.total['insertions'])
-    commits['delete'] = commits['raw'].apply(lambda x: x.stats.total['deletions'])
+
+    # A little improve for the dict construct
+    total = commits['raw'].apply(lambda x: x.stats.total)
+    commits['lines'] = total.apply(lambda x: int(x['lines']))
+    commits['insert'] = total.apply(lambda x: int(x['insertions']))
+    commits['delete'] = total.apply(lambda x: int(x['deletions']))
+
+    #commits['lines'] = commits['raw'].apply(lambda x: x.stats.total['lines'])
+    #commits['insert'] = commits['raw'].apply(lambda x: x.stats.total['insertions'])
+    #commits['delete'] = commits['raw'].apply(lambda x: x.stats.total['deletions'])
 
     return commits.iloc[::-1]
 
