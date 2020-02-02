@@ -1,33 +1,59 @@
 """ TODO """
 
+from subprocess import Popen, PIPE
 import pandas as pd
-import git
 import pyecharts.options as opts
 from pyecharts.charts import Bar, Timeline
+import regex as re
+#from dateutil.parser import parse
 
-def get_repo():
+
+#@profile
+def repo_analyze():
     """
     TODO
     """
-    #repo = git.Repo(r'~/work/reveal.js', odbt=git.GitCmdObjectDB)
-    repo = git.Repo(r'~/django-bootstrap-toolkit', odbt=git.GitCmdObjectDB)
-    commits = pd.DataFrame(repo.iter_commits('master'), columns=['raw'])
+    commit_info = {}
+    index = 0
+    #repo = r'/home/chenhuiz/work/reveal.js'
+    repo = r'/home/chenhuiz/django-bootstrap-toolkit'
+    cmd = [
+        r'git', r'log',
+        r'--pretty=format:%cn committed %h on %cI',
+        r'--shortstat',
+        r'--no-merges',
+        r'--reverse'
+    ]
 
-    commits['author'] = commits['raw'].apply(lambda x: x.author.name)
-    commits['committed_date'] = commits['raw'].apply(\
-            lambda x: x.committed_datetime.strftime('%Y-%m-%d %H:%M:%S'))
+    with Popen(cmd, cwd=repo, stdout=PIPE, stderr=PIPE) as proc:
+        for line in proc.stdout:
+            string = line.decode()
+            match = re.search(r' committed \w{7} on', string)
+            if match:
+                author = string[:match.start()]
+                date = string[match.end():-7]
+                # Too slow way
+                #date = parse(string[match.end():-1]).strftime('%Y-%m-%d %H:%M:%S')
+                insert = 0
+                delete = 0
+            elif re.search(r'file|insert|delet', string):
+                match = re.match(r".* (?P<insert>\d+) insertion?", string)
+                if match:
+                    insert = int(match.group('insert'))
+                match = re.match(r".* (?P<delete>\d+) deletion?", string)
+                if match:
+                    delete = int(match.group('delete'))
+            else:
+                commit_info[index] = {
+                    "date": date,
+                    "author": author,
+                    "add": insert - delete,
+                    "insert": insert,
+                    "delete": delete
+                }
+                index += 1
 
-    # A little improve for the dict construct
-    total = commits['raw'].apply(lambda x: x.stats.total)
-    commits['lines'] = total.apply(lambda x: int(x['lines']))
-    commits['insert'] = total.apply(lambda x: int(x['insertions']))
-    commits['delete'] = total.apply(lambda x: int(x['deletions']))
-
-    #commits['lines'] = commits['raw'].apply(lambda x: x.stats.total['lines'])
-    #commits['insert'] = commits['raw'].apply(lambda x: x.stats.total['insertions'])
-    #commits['delete'] = commits['raw'].apply(lambda x: x.stats.total['deletions'])
-
-    return commits.iloc[::-1]
+    return pd.DataFrame.from_dict(commit_info, "index")
 
 def get_commits_chart(time: str, names: list, c_insert: list, c_delete: list, c_add: list) -> Bar:
     """
@@ -62,29 +88,23 @@ def get_commits_chart(time: str, names: list, c_insert: list, c_delete: list, c_
     )
     return contribute
 
+#@profile
 def get_topX(top: dict, row: tuple, x: int):
     """
     TODO
     """
-    _, _, author, *_, insert, delete = row
-
-    contribute = pd.DataFrame(columns=['author', 'add', 'insert', 'delete'])
+    _, _, author, add, insert, delete = row
 
     if author not in top:
-        top[author] = (insert - delete, insert, delete)
+        top[author] = (add, insert, delete)
     else:
-        top[author] = (top[author][0] + insert - delete, \
+        top[author] = (top[author][0] + add, \
                 top[author][1] + insert, \
                 top[author][2] + delete)
 
-    topX = sorted(top.items(), reverse=True, key=lambda x: x[1][0])[:x]
+    topX = {k: v for k, v in sorted(top.items(), reverse=True, key=lambda i: i[1][0])[:x]}
 
-    for elem in topX:
-        rec = pd.Series(\
-                {'author': elem[0], 'add': elem[1][0], 'insert': elem[1][1], 'delete': elem[1][2]})
-        contribute = contribute.append(rec, ignore_index=True)
-
-    return contribute
+    return pd.DataFrame(topX).T.rename_axis("author").add_prefix('v').reset_index()
 
 def gcv_main():
     """
@@ -93,23 +113,24 @@ def gcv_main():
     # 生成时间轴的图
     timeline = Timeline(init_opts=opts.InitOpts(width="1600px", height="800px"))
 
-    commit_hist = get_repo()
+    commit_log = repo_analyze()
 
     contribute = {}
 
-    for item in commit_hist.itertuples():
+    for item in commit_log.itertuples():
         top_commiter = get_topX(contribute, item, 5)
 
-        timeline.add(get_commits_chart(time=item[3], \
+        timeline.add(get_commits_chart(time=item[1], \
                 names=top_commiter['author'].tolist(), \
-                c_insert=top_commiter['insert'].tolist(), \
-                c_delete=top_commiter['delete'].tolist(), \
-                c_add=top_commiter['add'].tolist()), \
-                time_point=item[3])
+                c_insert=top_commiter['v1'].tolist(), \
+                c_delete=top_commiter['v2'].tolist(), \
+                c_add=top_commiter['v0'].tolist()), \
+                time_point=item[1])
 
     # 1.0.0 版本的 add_schema 暂时没有补上 return self 所以只能这么写着
     timeline.add_schema(is_auto_play=True, play_interval=100)
     timeline.render("git.html")
+
 
 if __name__ == "__main__":
     gcv_main()
