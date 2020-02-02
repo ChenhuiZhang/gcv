@@ -1,0 +1,3 @@
+#!/bin/sh
+
+git-pylint-commit-hook --pylint pylint3 --limit=9.0
